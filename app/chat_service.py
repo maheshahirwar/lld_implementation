@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.llm_client import LLMClient
+from app.llm_client import BaseLLMClient
 from app.vector_store import RetrievedChunk, VectorStore
 
 
@@ -13,7 +13,7 @@ class ChatServiceError(Exception):
 @dataclass
 class ChatService:
     vector_store: VectorStore
-    llm_client: LLMClient
+    llm_client: BaseLLMClient
     retrieval_k: int
     max_context_chunks: int
 

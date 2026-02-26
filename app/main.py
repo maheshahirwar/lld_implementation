@@ -4,11 +4,12 @@ import logging
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
+import httpx
 from fastapi import FastAPI, File, HTTPException, UploadFile
 
 from app.chat_service import ChatService, ChatServiceError
 from app.config import get_settings
-from app.llm_client import LLMClient
+from app.llm_client import LLMConfigurationError, build_llm_client
 from app.pdf_processing import PDFProcessingError, chunk_text, extract_text_from_pdf
 from app.schemas import ChatRequest, ChatResponse, IngestResponse, SourceChunk
 from app.vector_store import VectorStore
@@ -25,7 +26,7 @@ app = FastAPI(title=settings.app_name)
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "environment": settings.app_env}
+    return {"status": "ok", "environment": settings.app_env, "llm_provider": settings.llm_provider}
 
 
 @app.post("/ingest", response_model=IngestResponse)
@@ -58,12 +59,14 @@ async def ingest_pdf(file: UploadFile = File(...)) -> IngestResponse:
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(payload: ChatRequest) -> ChatResponse:
-    if not settings.openai_api_key:
-        raise HTTPException(status_code=500, detail="OPENAI_API_KEY is not configured")
+    try:
+        llm_client = build_llm_client(settings)
+    except LLMConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     chat_service = ChatService(
         vector_store=vector_store,
-        llm_client=LLMClient(api_key=settings.openai_api_key, model=settings.openai_model),
+        llm_client=llm_client,
         retrieval_k=settings.retrieval_k,
         max_context_chunks=settings.max_context_chunks,
     )
@@ -72,6 +75,9 @@ def chat(payload: ChatRequest) -> ChatResponse:
         answer, sources = chat_service.answer(payload.question)
     except ChatServiceError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        logger.exception("LLM backend call failed")
+        raise HTTPException(status_code=502, detail=f"LLM backend error: {exc}") from exc
 
     return ChatResponse(
         answer=answer,

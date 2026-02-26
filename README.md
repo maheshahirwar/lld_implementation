@@ -4,7 +4,7 @@ A FastAPI-based LLM chatbot backend that:
 
 1. Uploads and ingests PDF files.
 2. Builds a retrieval index from PDF text.
-3. Answers user questions using retrieved context + OpenAI chat completion.
+3. Answers user questions using retrieved context via either OpenAI or Ollama.
 
 ## Features
 
@@ -13,32 +13,16 @@ A FastAPI-based LLM chatbot backend that:
 - Retrieval layer using TF-IDF + cosine similarity
 - Persistent local index storage (`data/index.pkl`)
 - Configurable via environment variables
+- Supports both OpenAI and Ollama LLM backends
 - Dockerized deployment
 - Basic test coverage with `pytest`
 
 ## Tech Stack
 
 - FastAPI + Uvicorn
-- OpenAI Python SDK
+- OpenAI Python SDK / Ollama HTTP API
 - scikit-learn (retrieval)
 - pypdf
-
-## Project Structure
-
-```text
-app/
-  main.py
-  config.py
-  chat_service.py
-  llm_client.py
-  pdf_processing.py
-  schemas.py
-  vector_store.py
-tests/
-Dockerfile
-requirements.txt
-.env.example
-```
 
 ## Setup
 
@@ -54,7 +38,29 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# Add your OPENAI_API_KEY
+```
+
+#### Option A: Test with Ollama (no OpenAI key required)
+
+```env
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.1
+```
+
+Make sure Ollama is running and the model is pulled:
+
+```bash
+ollama pull llama3.1
+ollama serve
+```
+
+#### Option B: Test with OpenAI
+
+```env
+LLM_PROVIDER=openai
+OPENAI_API_KEY=<your_key>
+OPENAI_MODEL=gpt-4o-mini
 ```
 
 ### 3) Run service
@@ -86,6 +92,12 @@ curl -X POST "http://localhost:8000/ingest" \
 curl -X POST "http://localhost:8000/chat" \
   -H "Content-Type: application/json" \
   -d '{"question": "What is the main topic of this PDF?"}'
+```
+
+## Testing
+
+```bash
+pytest -q
 ```
 
 ## Docker
